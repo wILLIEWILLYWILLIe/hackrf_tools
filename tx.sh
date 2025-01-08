@@ -243,17 +243,17 @@ fi
 
 # Define output filenames based on mode
 if [[ "$MODE" == "tone" ]]; then
-    OUTPUT_FILE="tone_iq.bin"
-    PYTHON_SCRIPT="./generate_tone.py"
+    OUTPUT_FILE="IQs_bins/tone_iq.bin"
+    PYTHON_SCRIPT="./packages/generate_tone.py"
 elif [[ "$MODE" == "chirp" ]]; then
-    OUTPUT_FILE="chirp_iq.bin"
-    PYTHON_SCRIPT="./generate_chirp.py"
+    OUTPUT_FILE="IQs_bins/chirp_iq.bin"
+    PYTHON_SCRIPT="./packages/generate_chirp.py"
 elif [[ "$MODE" == "hopping" ]]; then
-    OUTPUT_FILE="hopping_iq.bin"
-    PYTHON_SCRIPT="./generate_hopping.py"
+    OUTPUT_FILE="IQs_bins/hopping_iq.bin"
+    PYTHON_SCRIPT="./packages/generate_hopping.py"
 elif [[ "$MODE" == "square_block" ]]; then
-    OUTPUT_FILE="square_block_iq.bin"
-    PYTHON_SCRIPT="./generate_square_block.py"
+    OUTPUT_FILE="IQs_bins/square_block_iq.bin"
+    PYTHON_SCRIPT="./packages/generate_square_block.py"
 fi
 
 # Check if the required Python script exists

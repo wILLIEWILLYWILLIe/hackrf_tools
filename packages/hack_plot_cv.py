@@ -27,7 +27,7 @@ def get_img_from_spectro(spectro, plot_q = 5, dpi = 100):
 	return np.array(im).astype(np.uint8).T.copy()
 
 
-class replay_helper():
+class SpectrogramConverter_CV():
     def __init__(self, dir='', select: bool=False):
         self.__replay_dir = dir
         self.__select = select

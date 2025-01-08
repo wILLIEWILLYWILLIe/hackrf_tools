@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-# from hack_plot import SpectrogramConverter
-from replay_main import replay_helper
-import matplotlib
-matplotlib.use('Agg')
+import torch
+from packages.hack_plot_cv import SpectrogramConverter_CV
+from packages.hack_plot_torch import SpectrogramConverter
+
 try:
     # Only import HackRF if needed
     from pyhackrf2 import HackRF
@@ -11,7 +11,16 @@ except ImportError:
     HackRF = None
 
 def main():
-    TEST_WITH_FAKE_DATA = False
+    TEST_WITH_FAKE_DATA = True
+    USE_GPU = False
+    USE_TORCH = True
+
+    
+    device = torch.device('cuda' if (torch.cuda.is_available() and USE_GPU) else 'cpu')
+    if USE_TORCH:
+        spec_conv = SpectrogramConverter(device)
+    else:
+        spec_conv = SpectrogramConverter_CV()
 
     # 掃描參數設定
     sample_rate = 20e6  # 取樣率 (20 MHz)
@@ -73,8 +82,6 @@ def main():
     # ==================================================
     # 2. Convert all collected IQ data to Spectrograms
     # ==================================================
-    # spec_conv = SpectrogramConverter()
-    spec_conv = replay_helper()
 
     spectrogram_list = []
     freq_list = []
@@ -94,8 +101,7 @@ def main():
             time_duration=sample_time_interval,
             iq_arr=iq_arr
         )
-        spectro_np = spectro_dbm#.cpu().numpy()
-        spectrogram_list.append(spectro_np)
+        spectrogram_list.append(spectro_dbm)
         freq_list.append(current_freq)
 
     # 合併所有頻譜圖
@@ -126,7 +132,7 @@ def main():
     plt.xlabel("Frequency (MHz)")
     plt.ylabel("Time (s)")
 
-    plt.show()
+    # plt.show()
     plt.savefig("output_spectrogram.png")
     print("Plot saved to output_spectrogram.png")
 

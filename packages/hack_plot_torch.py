@@ -13,13 +13,14 @@ class SpectrogramConverter:
     TFA_OVERLAP = 0.3
     SIGMA = 5
 
-    def __init__(self, name='SpectrogramConverter'):
+    def __init__(self, name='SpectrogramConverter', device = 'cpu'):
         self.__bandwidth = None
         self.__sample_rate = None
         self.__time_duration = None
         self.__window = None
         self.__start_spectro_f = None
         self.__stop_spectro_f = None
+        self.__device = device
 
     def __set_args(self, bandwidth, sample_rate, time_duration):
         if (self.__bandwidth == bandwidth and self.__sample_rate == sample_rate
@@ -40,7 +41,7 @@ class SpectrogramConverter:
                 time_duration: float, iq_arr: np.ndarray) -> torch.Tensor:
         self.__set_args(bandwidth, sample_rate, time_duration)
         # Convert numpy array to tensor and move to GPU
-        iq_tensor = torch.from_numpy(iq_arr).to("cuda")
+        iq_tensor = torch.from_numpy(iq_arr).to(self.__device)
         # Compute spectrogram
         spectro = self.__to_spectrogram(iq_tensor)
         # Convert to dBm
@@ -60,6 +61,8 @@ class SpectrogramConverter:
         spectro = torch.abs(spectro_complex)
         spectro = torch.fft.fftshift(spectro, dim=0)  # pylint: disable=not-callable
         # spectro = spectro[self.__start_spectro_f:self.__stop_spectro_f, :]
+        if self.__device != 'cpu':
+            spectro = spectro.cpu().numpy()
         return spectro
 
     def __spec_to_dbm(self,
