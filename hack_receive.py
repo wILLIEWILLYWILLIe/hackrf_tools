@@ -11,11 +11,10 @@ except ImportError:
     HackRF = None
 
 def main():
-    TEST_WITH_FAKE_DATA = True
+    TEST_WITH_FAKE_DATA = False
     USE_GPU = False
     USE_TORCH = True
 
-    
     device = torch.device('cuda' if (torch.cuda.is_available() and USE_GPU) else 'cpu')
     if USE_TORCH:
         spec_conv = SpectrogramConverter(device)

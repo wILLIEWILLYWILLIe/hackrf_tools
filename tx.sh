@@ -69,7 +69,7 @@ function echo_error {
 
 # Initialize variables with default values
 
-MODE="hopping"
+MODE="square_block"
 FREQUENCY=1000000
 START_FREQ=80000
 END_FREQ=120000
@@ -78,14 +78,14 @@ HOP_DURATION=0.2
 
 BLOCK_FREQ=10000000
 BANDWIDTH=10000000
-BLOCK_DURATION=5e-4
-TIME_GAP=1e-3
+BLOCK_DURATION=5e-1
+TIME_GAP=1e-5
 SAMPLE_RATE=20000000
-DURATION=2.36e-3
+DURATION=5e-1
 AMPLITUDE=1
 CENTER_FREQ=2450000000
-TX_GAIN=10000
-LNA_GAIN=160
+TX_GAIN=400
+LNA_GAIN=400
 ANTENNA=1
 
 # Parse command-line arguments using getopt for both short and long options
@@ -286,40 +286,14 @@ echo_info "IQ data generated and saved to $OUTPUT_FILE."
 # Transmit the IQ data using hackrf_transfer
 echo_info "Transmitting IQ data using hackrf_transfer..."
 FREQUENCIES=(
-    2420000000
-    # 2425000000
-    # 2430000000
-    # 2435000000
-    # 2440000000
-    # 2445000000
-    2450000000
-    # 2455000000
-    # 2460000000
-    # 2465000000
-    # 2470000000
-    # 2475000000
-    2480000000
-    # 2485000000
-    # 2480000000
-    # 2475000000
-    # 2470000000
-    # 2465000000
-    # 2460000000
-    # 2455000000
-    # 2450000000
-    # 2445000000
-    # 2440000000
-    # 2435000000
-    # 2430000000
-    # 2425000000
-    # 2420000000
-    
+    1500000000
+    2000000000
 )
 FREQUENCIES=(
     5770000000
     5790000000
-    5800000000
-    5810000000
+    # 5800000000
+    # 5810000000
 )
 while true; do
     for FREQ in "${FREQUENCIES[@]}"; do
