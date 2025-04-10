@@ -1,2 +1,5 @@
 **/__pycache__/**
 .venv
+*.npy
+_spec_images/**
+**/tmp_bits/** 
