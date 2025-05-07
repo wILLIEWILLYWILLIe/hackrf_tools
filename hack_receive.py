@@ -1,76 +1,93 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+
 from packages.hack_plot_cv import SpectrogramConverter_CV
 from packages.hack_plot_torch import SpectrogramConverter
 
 try:
-    # Only import HackRF if needed
     from pyhackrf2 import HackRF
 except ImportError:
     HackRF = None
 
-def main():
-    TEST_WITH_FAKE_DATA = False
-    USE_GPU = False
-    USE_TORCH = True
+try:
+    from sa.sm200b import SM200b
+    from sa.sa_setting import SA_TRIGGER_TYPE
+except:
+    SM200B = None
 
-    device = torch.device('cuda' if (torch.cuda.is_available() and USE_GPU) else 'cpu')
-    if USE_TORCH:
-        spec_conv = SpectrogramConverter(device)
-    else:
-        spec_conv = SpectrogramConverter_CV()
+# ================
+# PARAMETERS INIT
+# ================
 
-    # 掃描參數設定
-    sample_rate = 20e6  # 取樣率 (20 MHz)
-    start_freq = 2400e6  # 掃描起始頻率 (2400 MHz)
-    end_freq = 2500e6  # 掃描結束頻率 (2500 MHz)
-    step_freq = sample_rate  # 每次掃描的頻寬 (20 MHz)
-    sample_time_interval = 15.36e-3  # 單次掃描時間 
-    samples_to_read = int(sample_time_interval * sample_rate)  # 每次讀取的樣本數
-    segments = int((end_freq - start_freq) // step_freq)  # 分段數
+USING_DEVICE= [
+                'FAKE',
+                'HACKRF',
+                'SM200B'
+                ]
+USE_GPU     = True
+USE_TORCH   = True
+SAVE_NPY    = True
+SAVE_NPY_NAME = "xxx"
 
-    # 增益參數設定
-    LNA_GAIN = 20  # LNA 增益（範圍：0 ~ 40）
-    VGA_GAIN = 10  # VGA 增益（範圍：0 ~ 62）
+# Scanning parameters (Hz)
+START_FREQ = 5780e6  # scanning start frequency
+END_FREQ   = 5800e6  # scanning end frequency
+CENTER_FREQ = 5.79e9  # For 200B
+TIME_INTERVAL = 15.36e-3*5 # 單次掃描時間 
 
-    # 儲存掃描結果
-    IQ_data = []
+# Device-specific parameters
+HACK_RF_PARAM = {
+    'SAMPLE_RATE': 20e6,  # 20 MHz sample rate
+    'LNA_GAIN': 5,       # LNA gain (0 ~ 40 dB)
+    'VGA_GAIN': 5        # VGA gain (0 ~ 62 dB)
+}
 
-    if not TEST_WITH_FAKE_DATA and HackRF is None:
-        print("pyhackrf2 not installed, and we are not using fake data. Exiting.")
-        return
+SM200B_PARAM = {
+    'SAMPLE_RATE': 250e6,  # 250 MHz sample rate
+    'REF_LEVEL': 0 ,        # Reference level in dB
+    'SERIAL_NUMBER' : 22336138
+}
 
-    if TEST_WITH_FAKE_DATA:
-        # 使用隨機數據模擬掃描
-        print(f"[FAKE MODE] Generating random IQ data for {segments} segments...")
-        for i in range(segments):
-            current_freq = start_freq + i * step_freq
-            print(f"Fake scanning at {current_freq / 1e6:.1f} MHz...")
-            samples = (np.random.randn(samples_to_read) + 
-                       1j * np.random.randn(samples_to_read)).astype(np.complex64)
-            IQ_data.append(samples)
-    else:
-        # 使用 HackRF 進行掃描
-        hackrf = HackRF()
-        print(f"Scanning from {start_freq / 1e6} MHz to {end_freq / 1e6} MHz "
+class IQ_Analysis:
+    def __init__(self, device_type='HACKRF', use_fake=False):
+        self.USING_DEVICE = device_type.upper()
+
+        # Setup spectrogram converter.
+        torch_device = torch.device("cuda" if (torch.cuda.is_available() and USE_GPU) else "cpu")
+        if USE_TORCH:
+            self.spec_conv = SpectrogramConverter(torch_device)
+        else:
+            self.spec_conv = SpectrogramConverter_CV()
+
+    # @staticmethod
+    def hackrf_receive(self):
+        IQ_data = []
+        hackrf  = HackRF()
+        step_freq = HACK_RF_PARAM['SAMPLE_RATE']  
+
+        print(f"Scanning from {START_FREQ/ 1e6} MHz to {END_FREQ / 1e6} MHz "
               f"in {step_freq / 1e6} MHz steps...")
+        
+        samples_to_read = int(TIME_INTERVAL * HACK_RF_PARAM['SAMPLE_RATE'])  # 每次讀取的樣本數
+        segments = int((END_FREQ - START_FREQ) // step_freq)  # 分段數
 
         try:
             for current_seg in range(segments):
-                current_freq = start_freq + current_seg * step_freq
+                current_freq = START_FREQ + current_seg * step_freq
 
-                hackrf.sample_rate = sample_rate
+                hackrf.sample_rate = HACK_RF_PARAM['SAMPLE_RATE']
                 hackrf.center_freq = current_freq
 
                 # 設定增益
-                hackrf.lna_gain = LNA_GAIN
-                hackrf.vga_gain = VGA_GAIN
+                hackrf.lna_gain = HACK_RF_PARAM['LNA_GAIN']
+                hackrf.vga_gain = HACK_RF_PARAM['VGA_GAIN']
 
-                print(f"Scanning at {current_freq / 1e6:.1f} MHz with LNA Gain: {LNA_GAIN} dB and VGA Gain: {VGA_GAIN} dB...")
+                print(f"Scanning at {current_freq / 1e6:.1f} MHz with LNA Gain: {HACK_RF_PARAM['LNA_GAIN']} dB and VGA Gain: {HACK_RF_PARAM['VGA_GAIN']} dB...")
 
                 samples = hackrf.read_samples(samples_to_read)
-                samples = np.asarray(samples, dtype=np.complex64)
+                # samples = np.asarray(samples, dtype=np.complex64).copy()
+                samples = np.array(samples, dtype=np.complex64)
 
                 IQ_data.append(samples)
 
@@ -78,62 +95,136 @@ def main():
             hackrf.close()
             print("HackRF closed.")
 
-    # ==================================================
-    # 2. Convert all collected IQ data to Spectrograms
-    # ==================================================
+        return IQ_data
+    
+    # @staticmethod
+    def sm200b_receive(self):
+        IQ_data = []
+        device = SM200b(SM200B_PARAM['SERIAL_NUMBER'])
 
-    spectrogram_list = []
-    freq_list = []
+        device.setCenterFreq(CENTER_FREQ)
+        device.setRefLevel(SM200B_PARAM['REF_LEVEL'])
+        device.setTimeDuration(TIME_INTERVAL)
+        device.setTrigger(SA_TRIGGER_TYPE.IMMEDIATE, 0)
 
-    for i, raw_iq in enumerate(IQ_data):
-        current_freq = start_freq + i * step_freq
-        print(f"Converting segment {i+1}/{segments} at {current_freq / 1e6:.1f} MHz")
+        iq_point_num = int(SM200B_PARAM['SAMPLE_RATE']*TIME_INTERVAL)
+        iq_arr = np.ndarray(shape=(iq_point_num,), dtype=np.complex64)
 
-        # 去除 DC LO leakage (零均值化)
-        raw_iq -= np.mean(raw_iq)  # 將 IQ 信號的均值調整為零
-        iq_arr = raw_iq
-        # iq_arr = np.ascontiguousarray(raw_iq, dtype=np.complex64)
+        device.startCaptureIq()
+        device.waitCaptureIq()
+        device.readIq(iq_arr)
 
-        spectro_dbm = spec_conv.convert(
-            bandwidth=step_freq,
-            sample_rate=sample_rate,
-            time_duration=sample_time_interval,
-            iq_arr=iq_arr
-        )
-        spectrogram_list.append(spectro_dbm)
-        freq_list.append(current_freq)
+        device.close()
 
-    # 合併所有頻譜圖
-    final_spectrogram = np.concatenate(spectrogram_list, axis=1)
-    print(f'final shape {final_spectrogram.shape}, total IQ length {segments * IQ_data[0].shape[0]}')
+        IQ_data.append(iq_arr)
 
-    T, F = final_spectrogram.shape
+        return IQ_data
+    
+    def receive_iq(self):
+        if self.USING_DEVICE == 'FAKE':
+            IQ_data = []
+            samples_to_read = int(TIME_INTERVAL * HACK_RF_PARAM['SAMPLE_RATE'])
+            segments = int((END_FREQ - START_FREQ) // HACK_RF_PARAM['SAMPLE_RATE'])  # 分段數
 
-    # 頻率軸更新為 start_freq 到 end_freq
-    freq_axis_mhz = np.linspace(start_freq / 1e6, end_freq / 1e6, F)
+            print(f"[FAKE MODE] Generating random IQ data for {segments} segments...")
+            for seg in range(segments):
+                current_freq = START_FREQ + seg * END_FREQ
+                print(f"Fake scanning at {current_freq/1e6:.1f} MHz...")
+                samples = (np.random.randn(samples_to_read) +
+                           1j * np.random.randn(samples_to_read)).astype(np.complex64)
+                IQ_data.append(samples)
 
-    # 時間軸更新範圍為 [0, sample_time_interval]
-    time_axis_s = np.linspace(0, sample_time_interval, T)
+        elif self.USING_DEVICE == 'HACKRF' : 
+            if HackRF is None:
+                print("pyhackrf2 not installed. Exiting.")
+                return None
+            IQ_data = self.hackrf_receive()
+        
+        elif self.USING_DEVICE == 'SM200B':
+            if SM200b is None:
+                print("SM200b module not installed. Exiting.")
+                return None
+            IQ_data = self.sm200b_receive()
+        else:
+            print("Unsupported device type. Exiting.")
+            return None
+        
+        return IQ_data
+    
+    def save_iq_data(self, IQ_data):
+        if SAVE_NPY:
+            for i, raw_iq in enumerate(IQ_data):
+                fc_mhz = int((START_FREQ + i * HACK_RF_PARAM['SAMPLE_RATE']) / 1e6)
+                filename = f"HackRF_SG/{SAVE_NPY_NAME}.npy"
+                np.save(filename, raw_iq)
+                print(f"Saved IQ data to {filename}")
+    
+    def convert_to_spectrogram(self, IQ_data):
+        spectrogram_list = []
+        if len(IQ_data) > 0:
+            for i, raw_iq in enumerate(IQ_data):
+                current_freq = START_FREQ + i * HACK_RF_PARAM['SAMPLE_RATE']
+                segments = int((END_FREQ - START_FREQ) // HACK_RF_PARAM['SAMPLE_RATE'])
 
-    # 設定繪圖範圍
-    x_min, x_max = freq_axis_mhz[0], freq_axis_mhz[-1]
-    y_min, y_max = time_axis_s[0], time_axis_s[-1]
+                print(f"Converting segment {i+1}/{segments} at {current_freq/1e6:.1f} MHz")
+                # Remove DC offset (LO leakage).
+                raw_iq = raw_iq - np.mean(raw_iq)
+                spectro_dbm = self.spec_conv.convert(
+                    bandwidth=self.step_freq,
+                    sample_rate=self.sample_rate,
+                    time_duration=self.time_interval,
+                    iq_arr=raw_iq
+                )
+                spectrogram_list.append(spectro_dbm)
+            final_spectrogram = np.concatenate(spectrogram_list, axis=1)
+            print(f"Final spectrogram shape: {final_spectrogram.shape}")
+            return final_spectrogram
+        else:
+            pass
 
-    # 畫圖
-    plt.figure(figsize=(6, 18))
-    plt.title("Concatenated Spectrogram of All Segments")
-    plt.imshow(final_spectrogram,
-               origin='lower',       # 確保低頻和早期時間在下方
-               aspect='auto',        # 保持比例不失真
-               cmap='gray',
-               extent=(x_min, x_max, y_min, y_max))
-    plt.colorbar(label="Power (dB)")
-    plt.xlabel("Frequency (MHz)")
-    plt.ylabel("Time (s)")
+    def plot_spectrogram(self, final_spectrogram):
+        T, F = final_spectrogram.shape
+        freq_axis_mhz = np.linspace(self.start_freq / 1e6, self.end_freq / 1e6, F)
+        time_axis_s = np.linspace(0, self.time_interval, T)
+        plt.figure(figsize=(6, 18))
+        plt.title("Concatenated Spectrogram of All Segments")
+        plt.imshow(final_spectrogram,
+                   origin='lower',
+                   aspect='auto',
+                   cmap='gray',
+                   extent=(freq_axis_mhz[0], freq_axis_mhz[-1], time_axis_s[0], time_axis_s[-1]))
+        plt.colorbar(label="Power (dB)")
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Time (s)")
+        plt.savefig("output_spectrogram.png")
+        print("Plot saved to output_spectrogram.png")
+        plt.close()
 
-    # plt.show()
-    plt.savefig("output_spectrogram.png")
-    print("Plot saved to output_spectrogram.png")
+    def run(self):
+        IQ_data = self.receive_iq()
+        if IQ_data is None:
+            print("No IQ data acquired. Exiting.")
+            return
+
+        self.save_iq_data(IQ_data)
+        if self.USING_DEVICE == 'HACKRF':
+            # final_spectrogram = self.convert_to_spectrogram(IQ_data)
+            # self.plot_spectrogram(final_spectrogram)
+            pass
+        return IQ_data
+
+
+# =======================
+# Main Entry Point
+# =======================
+def main():
+    # Choose device type: 'FAKE', 'HACKRF', or 'SM200B'
+    # analysis = IQ_Analysis(device_type="HACKRF", use_fake=False)
+    analysis = IQ_Analysis(device_type="SM200B", use_fake=False)
+    IQ_data = analysis.run()
+    print(len(IQ_data))
+
+
 
 if __name__ == "__main__":
     main()

@@ -2,4 +2,5 @@
 .venv
 *.npy
 _spec_images/**
+_filtered_iq
 **/tmp_bits/** 
